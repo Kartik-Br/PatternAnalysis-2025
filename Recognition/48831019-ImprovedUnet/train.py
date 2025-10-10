@@ -57,8 +57,8 @@ def train_unet(model, train_loader, val_loader, epochs=50, lr=1e-3, device="cuda
 
 if __name__ == "__main__":
     root = "/home/groups/comp3710/OASIS"
-    train_ds = OASISSegDataset(root+"keras_png_slices_train", root+"keras_png_slices_seg_train")
-    val_ds = OASISSegDataset(root+"keras_png_slices_validate", root+"keras_png_slices_seg_validate")
+    train_ds = OASISSegDataset(root+"/keras_png_slices_train", root+"/keras_png_slices_seg_train")
+    val_ds = OASISSegDataset(root+"/keras_png_slices_validate", root+"/keras_png_slices_seg_validate")
 
     train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, num_workers=8, pin_memory=True, persistent_workers=True)
     val_loader = DataLoader(val_ds, batch_size=32, shuffle=False, num_workers=8, pin_memory=True, persistent_workers=True)
