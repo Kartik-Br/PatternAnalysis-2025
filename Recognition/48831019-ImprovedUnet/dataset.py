@@ -1,49 +1,109 @@
+# dataset.py
 import os
 import numpy as np
-from PIL import Image
+import nibabel as nib
+from torch.utils.data import Dataset, DataLoader
 import torch
-import torch.nn.functional as F
-from torch.utils.data import Dataset
-from torchvision import transforms
+import random
 
-class OASISSegDataset(Dataset):
-    def __init__(self, img_dir, mask_dir, img_size=128):
-        self.img_paths = sorted([os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".png")])
-        self.mask_paths = sorted([os.path.join(mask_dir, f) for f in os.listdir(mask_dir) if f.endswith(".png")])
-        self.img_size = img_size
-        self.num_classes = 3  # Background, CSF, GM (WM/255 → background)
+# optional: use pyimgaug3d for augmentation if installed
+try:
+    import pyimgaug3d as pia3d
+    HAS_PIA = True
+except Exception:
+    HAS_PIA = False
 
-        self.img_transform = transforms.Compose([
-            transforms.Resize((img_size, img_size)),
-            transforms.ToTensor(),
-        ])
-        print(f"Loaded {len(self.img_paths)} images and {len(self.mask_paths)} masks from {img_dir}")
+
+def load_nifti_as_array(path):
+    img = nib.load(path)
+    data = img.get_fdata()
+    # remove singleton 4th dim if present
+    if data.ndim == 4:
+        data = data[..., 0]
+    return data.astype(np.float32), img.affine, img.header
+
+
+class Prostate3DDataset(Dataset):
+    """
+    Expects a list of (image_path, label_path) pairs.
+
+    Returns patches (C=1, D, H, W) and labels (D,H,W) as ints
+    """
+
+    def __init__(self, pairs, patch_size=(64,128,128), normalize=True, augment=True):
+        self.pairs = pairs
+        self.patch_size = patch_size
+        self.normalize = normalize
+        self.augment = augment and HAS_PIA
+        if self.augment:
+            # example transform chain - adjust as desired
+            self.aug = pia3d.Sequential([
+                pia3d.RandomFlip(axis=(0,1,2), p=0.25),
+                pia3d.RandomRotate3D(angle_range=(-10,10), p=0.3),
+                pia3d.RandomZoom3D(zoom_range=(0.9,1.1), p=0.3),
+                pia3d.RandomElasticDeformation3D(alpha=5, sigma=4, p=0.2),
+                # intensity transforms:
+                pia3d.RandomGamma(p=0.2),
+            ])
+        else:
+            self.aug = None
 
     def __len__(self):
-        return len(self.img_paths)
+        return len(self.pairs)
+
+    def random_patch(self, vol, label):
+        d, h, w = vol.shape
+        pd, ph, pw = self.patch_size
+        if d <= pd:
+            sd = 0
+        else:
+            sd = random.randint(0, d - pd)
+        if h <= ph:
+            sh = 0
+        else:
+            sh = random.randint(0, h - ph)
+        if w <= pw:
+            sw = 0
+        else:
+            sw = random.randint(0, w - pw)
+        patch = vol[sd:sd+pd, sh:sh+ph, sw:sw+pw]
+        lpatch = label[sd:sd+pd, sh:sh+ph, sw:sw+pw]
+        return patch, lpatch
+
+    def center_patch(self, vol, label):
+        d, h, w = vol.shape
+        pd, ph, pw = self.patch_size
+        sd = max(0, (d - pd)//2)
+        sh = max(0, (h - ph)//2)
+        sw = max(0, (w - pw)//2)
+        patch = vol[sd:sd+pd, sh:sh+ph, sw:sw+pw]
+        lpatch = label[sd:sd+pd, sh:sh+ph, sw:sw+pw]
+        return patch, lpatch
 
     def __getitem__(self, idx):
-        img = Image.open(self.img_paths[idx]).convert("L")
-        mask = Image.open(self.mask_paths[idx]).convert("L")
+        img_path, lbl_path = self.pairs[idx]
+        vol, _aff, _ = load_nifti_as_array(img_path)
+        label, _, _ = load_nifti_as_array(lbl_path)
+        # assume label ints
+        if random.random() < 0.8:
+            x, y = self.random_patch(vol, label)
+        else:
+            x, y = self.center_patch(vol, label)
+        # normalize intensity (z-score)
+        if self.normalize:
+            x = (x - x.mean()) / (x.std() + 1e-8)
+        x = np.expand_dims(x, 0)  # channel dim
+        x = x.astype(np.float32)
+        y = y.astype(np.int64)
 
-        img = self.img_transform(img)
+        if self.augment and self.aug is not None:
+            # pyimgaug3d expects inputs in shape (C,D,H,W) for volume and separate segmentation
+            # apply joint transforms
+            d = {'image': x, 'mask': y}
+            out = self.aug(d)
+            x = out['image']
+            y = out['mask']
 
-        # Resize and convert mask to tensor
-        mask = transforms.functional.resize(mask, (self.img_size, self.img_size), interpolation=Image.NEAREST)
-        mask = np.array(mask, dtype=np.uint8)
-        mask_tensor = torch.tensor(mask, dtype=torch.long)
-
-        # Map OASIS mask values
-        segmap = torch.zeros_like(mask_tensor)
-        segmap[mask_tensor == 0] = 0    # Background
-        segmap[mask_tensor == 85] = 1   # CSF
-        segmap[mask_tensor == 170] = 2  # GM
-        segmap[mask_tensor == 255] = 0  # Ignore → background
-
-        # One-hot encode
-        seg_onehot = F.one_hot(segmap, num_classes=self.num_classes).permute(2, 0, 1).float()
-
-        return img, seg_onehot
-
-
+        # to torch
+        return torch.from_numpy(x), torch.from_numpy(y)
 
