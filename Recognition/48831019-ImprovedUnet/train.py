@@ -12,48 +12,44 @@ from dataset import Prostate3DDataset
 
 # Dice / loss helpers
 def dice_coef(pred, target, smooth=1e-6, ignore_background=False):
-    # pred: B x C x D x H x W logits or probs; target: B x D x H x W ints
-    if pred.dim() == 5:
-        probs = torch.softmax(pred, dim=1)
-        # convert target to one-hot
-        num_classes = pred.shape[1]
-        target_oh = torch.nn.functional.one_hot(target, num_classes).permute(0,4,1,2,3).float()
-    else:
-        raise ValueError("Expected logits of shape BxCxDHW")
+    """
+    pred: B x C x D x H x W (logits)
+    target: B x C x D x H x W (one-hot)
+    """
+    if pred.dim() != 5 or target.dim() != 5:
+        raise ValueError("Expected tensors of shape [B, C, D, H, W]")
+
+    # Convert logits → probabilities
+    probs = torch.softmax(pred, dim=1)
+
+    num_classes = pred.shape[1]
     dices = []
+
+    # Optionally ignore background
     start = 1 if ignore_background else 0
+
     for c in range(start, num_classes):
         p = probs[:, c].contiguous().view(probs.size(0), -1)
-        t = target_oh[:, c].contiguous().view(target_oh.size(0), -1)
+        t = target[:, c].contiguous().view(target.size(0), -1)
+
         inter = (p * t).sum(1)
         denom = p.sum(1) + t.sum(1)
         dice = (2. * inter + smooth) / (denom + smooth)
         dices.append(dice.mean().item())
-    return dices  # list per-class dice
+
+    return dices  # list of per-class Dice scores
 
 class DiceLoss(nn.Module):
-    def __init__(self, smooth=1e-6, weight=None, ignore_background=False):
+    def __init__(self, smooth=1e-6):
         super().__init__()
         self.smooth = smooth
-        self.weight = weight
-        self.ignore_background = ignore_background
 
-    def forward(self, logits, target):
+    def forward(self, logits, target_oh):
         probs = torch.softmax(logits, dim=1)
-        num_classes = logits.shape[1]
-        target_oh = torch.nn.functional.one_hot(target, num_classes).permute(0,4,1,2,3).float()
-        start = 1 if self.ignore_background else 0
-        loss = 0.0
-        for c in range(start, num_classes):
-            p = probs[:, c].contiguous().view(probs.size(0), -1)
-            t = target_oh[:, c].contiguous().view(target_oh.size(0), -1)
-            inter = (p * t).sum(1)
-            denom = p.sum(1) + t.sum(1)
-            loss_c = 1 - ((2. * inter + self.smooth) / (denom + self.smooth))
-            loss += loss_c.mean()
-        if self.weight is not None:
-            loss = loss * self.weight
-        return loss
+        inter = (probs * target_oh).sum(dim=(2,3,4))
+        denom = probs.sum(dim=(2,3,4)) + target_oh.sum(dim=(2,3,4))
+        dice = (2 * inter + self.smooth) / (denom + self.smooth)
+        return 1 - dice.mean()
 
 def make_pairs_from_directory(img_dir, lbl_dir):
     imgs = sorted([os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith('.nii') or f.endswith('.nii.gz')])
@@ -97,83 +93,101 @@ def train_loop(args):
 
     model = ImprovedUNet3D(in_channels=1, out_channels=args.num_classes, base_filters=args.base_filters).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    criterion = DiceLoss(ignore_background=False)
+    criterion = DiceLoss()
+    model = ImprovedUNet3D(
+        in_channels=1,
+        out_channels=args.num_classes,
+        base_filters=args.base_filters
+    ).to(device)
 
-    best_val_dice = 0.0
-    history = {'train_loss': [], 'val_loss': [], 'val_mean_dice': []}
 
-    for epoch in range(1, args.epochs + 1):
+    train_losses = []
+    val_losses = []
+    val_dice_scores = []  # list of lists (per-class)
+
+    for epoch in range(args.epochs):
         model.train()
         epoch_loss = 0.0
-        t0 = time.time()
         for xb, yb in train_loader:
-            xb = xb.to(device)
-            yb = yb.to(device)
-            logits = model(xb)
-            if torch.any(yb >= args.num_classes):
-                bad = yb[yb >= args.num_classes]
-                print("🔥 Found invalid label(s):", bad.unique(), "max label:", yb.max().item())
-                raise ValueError("Label index out of range for num_classes")
-            loss = criterion(logits, yb)
+            xb, yb = xb.to(device), yb.to(device)
+
             optimizer.zero_grad()
+            logits = model(xb)
+            loss = criterion(logits, yb)
             loss.backward()
             optimizer.step()
-            epoch_loss += loss.item() * xb.size(0)
-        epoch_loss /= len(train_loader.dataset)
-        history['train_loss'].append(epoch_loss)
 
-        # validation
+            epoch_loss += loss.item()
+
+        train_losses.append(epoch_loss / len(train_loader))
+
+        # --- Validation ---
         model.eval()
         val_loss = 0.0
-        dice_list = []
+        dices_per_class = []
+
         with torch.no_grad():
             for xb, yb in val_loader:
-                xb = xb.to(device)
-                yb = yb.to(device)
+                xb, yb = xb.to(device), yb.to(device)
                 logits = model(xb)
                 loss = criterion(logits, yb)
-                val_loss += loss.item() * xb.size(0)
-                dices = dice_coef(logits, yb)
-                dice_list.append(np.mean(dices))
-        val_loss /= len(val_loader.dataset)
-        mean_dice = np.mean(dice_list) if len(dice_list) > 0 else 0.0
-        history['val_loss'].append(val_loss)
-        history['val_mean_dice'].append(mean_dice)
+                val_loss += loss.item()
 
-        print(f"Epoch {epoch}/{args.epochs} train_loss={epoch_loss:.4f} val_loss={val_loss:.4f} val_mean_dice={mean_dice:.4f} time={(time.time()-t0):.1f}s")
+                # per-class DSC
+                dices = dice_coef(logits, yb)  # list of floats
+                dices_per_class.append(dices)
 
-        # checkpoint best
-        if mean_dice > best_val_dice:
-            best_val_dice = mean_dice
-            torch.save({
-                'epoch': epoch,
-                'model_state': model.state_dict(),
-                'optimizer_state': optimizer.state_dict(),
-                'best_val_dice': best_val_dice,
-                'history': history
-            }, args.checkpoint)
-            print(f"Saved best model (dice={best_val_dice:.4f}) -> {args.checkpoint}")
+        val_loss /= len(val_loader)
+        val_losses.append(val_loss)
 
-        # simple scheduler
-        if epoch % args.save_every == 0:
-            # also save a regular checkpoint
-            ck = args.checkpoint.replace('.pt', f'.epoch{epoch}.pt')
-            torch.save({'epoch': epoch, 'model_state': model.state_dict()}, ck)
+        # average DSC per class across validation set
+        dices_per_class = np.array(dices_per_class)
+        mean_dices = dices_per_class.mean(axis=0).tolist()
+        val_dice_scores.append(mean_dices)
 
-    # write training plots
-    plt.figure()
-    plt.plot(history['train_loss'], label='train_loss')
-    plt.plot(history['val_loss'], label='val_loss')
-    plt.xlabel('epoch')
+        print(f"[Epoch {epoch+1}/{args.epochs}] "
+              f"Train Loss: {train_losses[-1]:.4f}, "
+              f"Val Loss: {val_loss:.4f}")
+        for i, dsc in enumerate(mean_dices):
+            print(f"  Class {i}: DSC={dsc:.4f}")
+
+        # Optional: checkpoint
+        torch.save(model.state_dict(), f"checkpoints/epoch_{epoch+1:03d}.pt")
+
+    # --- Plot curves after training ---
+    plot_training_curves(train_losses, val_losses, val_dice_scores)
+
+def plot_training_curves(train_losses, val_losses, val_dice_scores):
+    epochs = np.arange(1, len(train_losses) + 1)
+
+    # Plot training vs validation loss
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, train_losses, label="Train Loss (Dice)")
+    plt.plot(epochs, val_losses, label="Val Loss (Dice)")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training & Validation Dice Loss")
     plt.legend()
-    plt.savefig('loss_plot.png')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("results_prostate3d/loss_curve.png", dpi=150)
+    plt.close()
 
-    plt.figure()
-    plt.plot(history['val_mean_dice'], label='val_mean_dice')
-    plt.xlabel('epoch')
+    # Plot per-class DSC
+    val_dice_scores = np.array(val_dice_scores)
+    num_classes = val_dice_scores.shape[1]
+    plt.figure(figsize=(8, 5))
+    for c in range(num_classes):
+        plt.plot(epochs, val_dice_scores[:, c], label=f"Class {c}")
+    plt.xlabel("Epoch")
+    plt.ylabel("Mean DSC")
+    plt.title("Per-Class Validation Dice Coefficient")
     plt.legend()
-    plt.savefig('dice_plot.png')
-    print("Training finished. Best val dice:", best_val_dice)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("results_prostate3d/dsc_per_class.png", dpi=150)
+    plt.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -30,6 +30,7 @@ def predict_volume(model_path, image_path, out_path, device='cuda'):
         probs = torch.softmax(logits, dim=1)
         pred = torch.argmax(probs, dim=1).cpu().numpy()[0]
     # save as nifti
+
     out_img = nib.Nifti1Image(pred.astype(np.uint8), affine=aff)
     nib.save(out_img, out_path)
     print("Saved prediction to", out_path)
