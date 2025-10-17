@@ -84,26 +84,35 @@ class Prostate3DDataset(Dataset):
         img_path, lbl_path = self.pairs[idx]
         vol, _aff, _ = load_nifti_as_array(img_path)
         label, _, _ = load_nifti_as_array(lbl_path)
-        # assume label ints
+
         if random.random() < 0.8:
             x, y = self.random_patch(vol, label)
         else:
             x, y = self.center_patch(vol, label)
+
         # normalize intensity (z-score)
         if self.normalize:
             x = (x - x.mean()) / (x.std() + 1e-8)
-        x = np.expand_dims(x, 0)  # channel dim
-        x = x.astype(np.float32)
-        y = y.astype(np.int64)
+
+        # add channel dim once
+        x = np.expand_dims(x, 0).astype(np.float32)  # (1, D, H, W)
+        y = np.rint(y).astype(np.uint8)
 
         if self.augment and self.aug is not None:
-            # pyimgaug3d expects inputs in shape (C,D,H,W) for volume and separate segmentation
-            # apply joint transforms
             d = {'image': x, 'mask': y}
             out = self.aug(d)
             x = out['image']
             y = out['mask']
 
-        # to torch
-        return torch.from_numpy(x), torch.from_numpy(y)
+        # one-hot encode AFTER augmentation
+        num_classes = 6
+        onehot = np.eye(num_classes)[y]          # (D,H,W,C)
+        onehot = np.transpose(onehot, (3,0,1,2)) # (C,D,H,W)
+
+        # --- to torch ---
+        x_t = torch.from_numpy(x).float()        # (1, D, H, W)
+        y_t = torch.from_numpy(onehot).float()   # (C, D, H, W)
+
+        return x_t, y_t
+
 
