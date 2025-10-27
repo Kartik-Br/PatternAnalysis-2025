@@ -6,26 +6,25 @@
 
 ## Introduction
 
-U-Net is a convolutional neural network architecture designed for image segmentation. It follows an encoder–decoder structure, where the encoder progressively down-samples the input to extract semantic features, and the decoder reconstructs the segmentation map from these compressed representations [@geeksforgeeks_unet]. Skip connections link corresponding encoder and decoder stages, transferring high-resolution contextual information that improves localization and boundary accuracy.
+U-Net is a convolutional neural network architecture designed for image segmentation. It follows an encoder–decoder structure, where the encoder progressively down-samples the input to extract semantic features, and the decoder reconstructs the segmentation map from these compressed representations [1]. Skip connections link corresponding encoder and decoder stages, transferring high-resolution contextual information that improves localization and boundary accuracy.
 
 ![Standard U-Net architecture.](readme-images/u-net-architecture.png)
 
-The 3D U-Net extends this framework to volumetric data. It replaces 2D convolutions and pooling operations with their 3D counterparts, allowing the network to capture spatial relationships across depth, height, and width [@xiao2020lung].
+The 3D U-Net extends this framework to volumetric data. It replaces 2D convolutions and pooling operations with their 3D counterparts, allowing the network to capture spatial relationships across depth, height, and width [2].
 
-The *Improved 3D U-Net* enhances this baseline with several architectural modifications, including pre-activation residual blocks, instance normalization, dropout, and deep supervision. These components improve gradient flow, training stability, convergence speed, and generalization performance.
+The Improved 3D U-Net enhances this baseline with several architectural modifications, including pre-activation residual blocks, instance normalization, dropout, and deep supervision. These components improve gradient flow, training stability, convergence speed, and generalization performance.
 
 ---
 
 ## Problem
 
-3D image segmentation is useful for medical imaging, specifically 3D MRI scans [@attention_unet_sensors2023].  
-The model described below was made to segment the Prostate 3D MRI dataset, used for the HipMRI Study on Prostate Cancer.
+3D image segmentation is useful for medical imaging, specifically 3D MRI scans [3]. the model described below was made to segment the Prostate 3D MRI dataset, used for the HipMRI Study on Prostate Cancer. 
 
 ---
 
 ## Model
 
-Both the encoder and decoder employ a **Pre-activation Residual Block**, designed to enable stable training and efficient feature reuse. Each block applies Instance Normalization and a ReLU activation before a \(3\times3\times3\) convolution. A dropout layer is inserted between the two convolutions to mitigate overfitting. The input is then added to the output through a residual connection; if the channel dimensions differ, a convolution \(1\times1\times1\) aligns them before summation.
+Both the encoder and decoder employ a Pre-activation Residual Block, designed to enable stable training and efficient feature reuse. Each block applies Instance Normalization and a ReLU activation before a 3 × 3 × 3 convolution. A dropout layer is inserted between the two convolutions to mitigate overfitting. The input is then added to the output through a residual connection; if the channel dimensions differ, a convolution 1 × 1 × 1 aligns them before summation.
 
 ### Encoder
 
@@ -57,7 +56,7 @@ $$
 L_{CE} = -\frac{1}{N}\sum_{i=1}^{N}\sum_{c=1}^{C} w_c \, g_{i,c}\log(p_{i,c})
 $$
 
-where \(w_c\) is the weight of the class, \(g_{i,c}\) is the ground truth label, and \(p_{i,c}\) is the predicted probability that voxel \(i\) belongs to class \(c\) [@diceloss].  
+where \(w_c\) is the weight of the class, \(g_{i,c}\) is the ground truth label, and \(p_{i,c}\) is the predicted probability that voxel \(i\) belongs to class \(c\) [7].  
 Weights were determined by how much a class dominated training in a CE loss training without dice.
 
 **Final Combined Loss:**
@@ -79,12 +78,12 @@ The combined DiceCE loss was used instead of standard cross entropy because the 
 ## Dataset
 
 As mentioned above, the model was used on the HipMRI Prostate 3D dataset.  
-This dataset consists of several MR images of the male pelvis, labeled weekly [@hipmri].  
+This dataset consists of several MR images of the male pelvis, labeled weekly [4].  
 There were a total of 6 separate segments in the data. The goal was to obtain a Dice Similarity Coefficient (DSC) of more than 0.7 for all segments, provided by the Improved 3D U-Net.
 
 The data comes in two folders: the semantic images and the labels.  
 The data was resized from 256×256×128 to 128×128×64 to reduce computational power.  
-The default training/validation split was **80 × 10 × 10**, which is a common split prioritizing training results [@training].
+The default training/validation split was **80 × 10 × 10**, which is a common split prioritizing training results [6].
 
 The test script saves the indexes in the test split in a JSON file. These are the images to be used in the prediction script given a model.
 
@@ -116,7 +115,7 @@ To run the training script and reproduce results:
 
 This will output `DSCSCORES.npy` and `VTLOSSES.npy`, which are NumPy files containing DSCs per class and the validation/test losses respectively.
 
-To run the prediction script:
+to run the prediction script, make sure to run train.py once to get a model and JSON file containing the test split, and change the IMAGE_PATH variable at the top of predict to the image you want to process to fallback, then run the following.
 - `python predict.py`
 
 This saves predictions in the `predictions_test` directory.
@@ -125,12 +124,11 @@ This saves predictions in the `predictions_test` directory.
 
 ## Results
 
-The training saves the model with the lowest training loss, achieved at epoch 24. Using the output `.npy` files, the following plots were made:
+the training saves the model with the lowest training loss, which was achieved at epoch 24. Using the output `.npy` files, the following plots were made:
 
 ![training loss and validation loss over 40 epochs](readme-images/loss_curve.png)
 
-As expected, the training and validation losses decreased over epochs. Validation loss suggests the model converged around 15–20 epochs.  
-We can verify this using the Dice Similarity Coefficient (DSC) plot:
+as expected, the training and validation losses decreased over the amount of epochs. loss suggests that for validation loss, the model was essentially done at ~15-20 epochs. we can verify this using the Dice Similarity Coefficient (DSC) plot over 40 epochs.
 
 ![DSC scores for six segmented classes over 40 epochs](readme-images/DSC%20Scores.png)
 
@@ -141,7 +139,7 @@ Each class exhibits a generally upward trend, plateauing after ~15 epochs.
 
 ## Example Outputs
 
-`predict.py` was run on 3 samples in the test set. These were visualized using **MRIcron**, a NIfTI file viewer [@mricron].
+`predict.py` was run on 3 samples in the test set. These were visualized using **MRIcron**, a NIfTI file viewer [5].
 
 The figures below show multi-panel medical image visualizations:
 
@@ -154,7 +152,7 @@ The figures below show multi-panel medical image visualizations:
 ## Discussions
 
 The training saves the model with the lowest validation loss, preventing overfitting.  
-An optimal model was reached at epoch = 24, achieving DSC > 0.7 for all segments before 5 epochs.  
+An optimal model was reached at epoch = 24, and achieving DSC > 0.7 for all segments was done before 5 epochs.  
 Each epoch took roughly 1 minute.
 
 **Validation results for epoch 24:**
@@ -170,34 +168,32 @@ Each epoch took roughly 1 minute.
 | Class 4 |  | **0.8651** |
 | Class 5 |  | **0.8557** |
 
-This implies that the module effectively segments the MRI Prostate Dataset.  
-However, minor overfitting may have occurred after ~15 epochs, visible in the loss plot where validation loss trends upward.
-
+this implies that the module trained effectively segments the MRI Prostate Dataset. however, at such a high number of epochs, some overfitting may have been done, which can be seen in the loss plot, the validation loss trends higher at epoch~15. this implies that the model stopped learning meaningful features and started fitting towards the test dataset.
 ---
 
 ## References
 
-- <a name="geeksforgeeks_unet"></a> **GfG Editorial Team** (2025) *U-Net Architecture Explained*. GeeksforGeeks, 9 October.  
+- [1] <a name="geeksforgeeks_unet"></a> **GfG Editorial Team** (2025) *U-Net Architecture Explained*. GeeksforGeeks, 9 October.  
   Available at: [https://www.geeksforgeeks.org/machine-learning/u-net-architecture-explained/](https://www.geeksforgeeks.org/machine-learning/u-net-architecture-explained/) (Accessed: 27 October 2025).
 
-- <a name="xiao2020lung"></a> **Xiao, Z., Liu, B., Geng, L., Zhang, F. and Liu, Y.** (2020) ‘Segmentation of lung nodules using improved 3D-UNet neural network’, *Symmetry*, 12(11), p.1787.  
+- [2] <a name="xiao2020lung"></a> **Xiao, Z., Liu, B., Geng, L., Zhang, F. and Liu, Y.** (2020) ‘Segmentation of lung nodules using improved 3D-UNet neural network’, *Symmetry*, 12(11), p.1787.  
   doi:[10.3390/sym12111787](https://doi.org/10.3390/sym12111787).  
   Available at: [https://www.mdpi.com/2073-8994/12/11/1787](https://www.mdpi.com/2073-8994/12/11/1787).
 
-- <a name="attention_unet_sensors2023"></a> **Zhang, Y.-D.** (2023) ‘Improved U-Net with attention for medical image segmentation’, *Sensors*, 23(20), p.8589.  
+- [3] <a name="attention_unet_sensors2023"></a> **Zhang, Y.-D.** (2023) ‘Improved U-Net with attention for medical image segmentation’, *Sensors*, 23(20), p.8589.  
   doi:[10.3390/sensors23208589](https://doi.org/10.3390/sensors23208589).  
   Available at: [https://www.mdpi.com/1424-8220/23/20/8589](https://www.mdpi.com/1424-8220/23/20/8589).
 
-- <a name="hipmri"></a> **CSIRO** (n.d.) *HipMRI Study: 3D Prostate MRI Dataset*.  
+- [4] <a name="hipmri"></a> **CSIRO** (n.d.) *HipMRI Study: 3D Prostate MRI Dataset*.  
   Available at: [https://data.csiro.au/collection/csiro:51392v2?redirected=true](https://data.csiro.au/collection/csiro:51392v2?redirected=true).
 
-- <a name="mricron"></a> **Rorden, C.** (n.d.) *MRIcron: Medical Image Visualization Tool*.  
+- [5] <a name="mricron"></a> **Rorden, C.** (n.d.) *MRIcron: Medical Image Visualization Tool*.  
   Available at: [https://www.nitrc.org/projects/mricron/](https://www.nitrc.org/projects/mricron/).
 
-- <a name="training"></a> **Sivakumar, M., Parthasarathy, S. and Padmapriya, T.** (2024) ‘Trade-off between training and testing ratio in machine learning for medical image processing’.  
+- [6] <a name="training"></a> **Sivakumar, M., Parthasarathy, S. and Padmapriya, T.** (2024) ‘Trade-off between training and testing ratio in machine learning for medical image processing’.  
   Available at: [https://pmc.ncbi.nlm.nih.gov/articles/PMC11419616/](https://pmc.ncbi.nlm.nih.gov/articles/PMC11419616/).
 
-- <a name="diceloss"></a> **Hosseini, S.M.** (2024) *TopK Dice Loss for Medical Image Segmentation*.  
+- [7] <a name="diceloss"></a> **Hosseini, S.M.** (2024) *TopK Dice Loss for Medical Image Segmentation*.  
   Available at: [https://bmva-archive.org.uk/bmvc/2024/papers/Paper_897/paper.pdf](https://bmva-archive.org.uk/bmvc/2024/papers/Paper_897/paper.pdf).
 
 ---

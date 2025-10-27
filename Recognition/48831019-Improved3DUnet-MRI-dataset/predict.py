@@ -8,11 +8,14 @@ from scipy.ndimage import zoom
 from modules import Improved3DUNet
 
 NUM_CLASSES = 6
-MODEL_PATH = 'deep_supervision_unet.pth'
-# If splits.json exists, we will use its test split; otherwise fallback to IMAGE_PATH
-IMAGE_PATH = '/home/groups/comp3710/HipMRI_Study_open/semantic_MRs/H017_Week6_LFOV.nii.gz'
-OUTPUT_DIR = 'predictions_test'  # predictions for test split will be saved here
-SPLITS_PATH = 'splits.json'
+MODEL_PATH = "deep_supervision_unet.pth"
+# If splits.json exists, we will use its test split; make sure to change this if it doesn't
+IMAGE_PATH = (
+    "/home/groups/comp3710/HipMRI_Study_open/semantic_MRs/H017_Week6_LFOV.nii.gz"
+)
+OUTPUT_DIR = "predictions_test"  # predictions for test split will be saved here
+SPLITS_PATH = "splits.json"
+
 
 def predict_one(model, image_path, device):
     model.eval()
@@ -31,17 +34,21 @@ def predict_one(model, image_path, device):
     zoom_factors = (
         target_shape[0] / original_shape[0],
         target_shape[1] / original_shape[1],
-        target_shape[2] / original_shape[2]
+        target_shape[2] / original_shape[2],
     )
 
-    image_array = zoom(image_array, zoom_factors, order=1, mode='constant', cval=0.0)
+    image_array = zoom(image_array, zoom_factors, order=1, mode="constant", cval=0.0)
 
     # Normalize
     if np.max(image_array) > np.min(image_array):
-        image_array = (image_array - np.min(image_array)) / (np.max(image_array) - np.min(image_array))
+        image_array = (image_array - np.min(image_array)) / (
+            np.max(image_array) - np.min(image_array)
+        )
 
     # Add batch and channel dimensions
-    image_tensor = torch.from_numpy(image_array).unsqueeze(0).unsqueeze(0).float().to(device)
+    image_tensor = (
+        torch.from_numpy(image_array).unsqueeze(0).unsqueeze(0).float().to(device)
+    )
 
     with torch.no_grad():
         output = model(image_tensor)
@@ -60,32 +67,34 @@ def predict_one(model, image_path, device):
     zoom_factors_inverse = (
         original_shape[0] / prediction.shape[0],
         original_shape[1] / prediction.shape[1],
-        original_shape[2] / prediction.shape[2]
+        original_shape[2] / prediction.shape[2],
     )
-    prediction_resampled = zoom(prediction, zoom_factors_inverse, order=0, mode='constant', cval=0.0)
+    prediction_resampled = zoom(
+        prediction, zoom_factors_inverse, order=0, mode="constant", cval=0.0
+    )
 
     # Transpose back to (H, W, D) for saving
     prediction_resampled = np.transpose(prediction_resampled, (1, 2, 0))
 
     return prediction_resampled.astype(np.uint8), original_affine
 
-if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Load model
     model = Improved3DUNet(in_channels=1, out_channels=NUM_CLASSES).to(device)
     ckpt = torch.load(MODEL_PATH, map_location=device)
-    if isinstance(ckpt, dict) and 'state_dict' in ckpt:
-        ckpt = ckpt['state_dict']
+    if isinstance(ckpt, dict) and "state_dict" in ckpt:
+        ckpt = ckpt["state_dict"]
     model.load_state_dict(ckpt)
-    print("Model loaded.")
 
     # Determine images to predict: prefer test split from splits.json
     test_images = None
     if os.path.exists(SPLITS_PATH):
         try:
-            with open(SPLITS_PATH, 'r') as f:
+            with open(SPLITS_PATH, "r") as f:
                 splits = json.load(f)
             test_images = splits.get("test_image_files", None)
             if test_images:
@@ -99,7 +108,11 @@ if __name__ == '__main__':
             try:
                 pred_mask, affine = predict_one(model, img_path, device)
                 base = os.path.basename(img_path)
-                out_name = os.path.splitext(os.path.splitext(base)[0])[0] + "_pred.nii.gz" if base.endswith(".nii.gz") else base + "_pred.nii.gz"
+                out_name = (
+                    os.path.splitext(os.path.splitext(base)[0])[0] + "_pred.nii.gz"
+                    if base.endswith(".nii.gz")
+                    else base + "_pred.nii.gz"
+                )
                 out_path = os.path.join(OUTPUT_DIR, out_name)
                 nib.save(nib.Nifti1Image(pred_mask, affine), out_path)
                 print(f"Saved: {out_path}")
@@ -108,7 +121,7 @@ if __name__ == '__main__':
         print(f"All test predictions saved in: {OUTPUT_DIR}")
     else:
         # Fallback: single image mode using IMAGE_PATH and single OUTPUT_PATH
-        OUTPUT_PATH = 'predicted_segmentation_multiclass2.nii.gz'
+        OUTPUT_PATH = "predicted_segmentation_multiclass2.nii.gz"
         print(f"No test split found; falling back to single image: {IMAGE_PATH}")
         pred_mask, affine = predict_one(model, IMAGE_PATH, device)
         nib.save(nib.Nifti1Image(pred_mask, affine), OUTPUT_PATH)

@@ -14,18 +14,21 @@ class PreActResBlock(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
 
+        # extract features and channel expansion
         self.conv1 = nn.Conv3d(
             in_channels, out_channels, kernel_size=3, padding=1, bias=False
         )
         self.norm1 = nn.InstanceNorm3d(in_channels)
         self.relu1 = nn.ReLU(inplace=True)
 
+        # convolution to refine features
         self.conv2 = nn.Conv3d(
             out_channels, out_channels, kernel_size=3, padding=1, bias=False
         )
         self.norm2 = nn.InstanceNorm3d(out_channels)
         self.relu2 = nn.ReLU(inplace=True)
 
+        # dropout prob for regularization
         self.dropout = nn.Dropout3d(p=dropout_prob)
 
         # Shortcut connection to match dimensions if in_channels != out_channels
@@ -41,11 +44,12 @@ class PreActResBlock(nn.Module):
 
         out = self.relu1(self.norm1(x))
         out = self.conv1(out)
-        out = self.dropout(out)  # Apply dropout
+        out = self.dropout(out)
 
         out = self.relu2(self.norm2(out))
         out = self.conv2(out)
 
+        # adding residual connections from previous layers
         return out + residual
 
 
