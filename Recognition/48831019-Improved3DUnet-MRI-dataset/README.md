@@ -153,48 +153,54 @@ The figures below show multi-panel medical image visualizations:
 
 The training saves the model with the lowest validation loss, preventing overfitting.  
 An optimal model was reached at epoch = 24, and achieving DSC > 0.7 for all segments was done before 5 epochs.  
-Each epoch took roughly 1 minute.
+Each epoch took roughly **1 minute**.
 
-**Validation results for epoch 24:**
+### Validation results for epoch 24
 
 | Metric | Train | Validation |
-|:-------|:------|:-----------|
+|:--------|:------|:-----------|
 | **Loss** | 0.2801 | 0.3373 |
-| **Validation DSC scores** |  |  |
-| Class 0 |  | **0.9957** |
-| Class 1 |  | **0.9829** |
-| Class 2 |  | **0.9167** |
-| Class 3 |  | **0.9357** |
-| Class 4 |  | **0.8651** |
-| Class 5 |  | **0.8557** |
 
-this implies that the module trained effectively segments the MRI Prostate Dataset. however, at such a high number of epochs, some overfitting may have been done, which can be seen in the loss plot, the validation loss trends higher at epoch~15. this implies that the model stopped learning meaningful features and started fitting towards the test dataset.
----
+**Validation DSC scores**
+
+| Class | DSC |
+|:------|:----|
+| **Class 0** | **0.9957** |
+| **Class 1** | **0.9829** |
+| **Class 2** | **0.9167** |
+| **Class 3** | **0.9357** |
+| **Class 4** | **0.8651** |
+| **Class 5** | **0.8557** |
+
+This implies that the module trained effectively segments the MRI Prostate Dataset.  
+However, at such a high number of epochs, some overfitting may have occurred, which can be seen in the loss plot — the validation loss trends higher around epoch ≈ 15.  
+This suggests that the model stopped learning meaningful features and began fitting towards the test dataset.
+
 
 ## References
 
 - [1] <a name="geeksforgeeks_unet"></a> **GfG Editorial Team** (2025) *U-Net Architecture Explained*. GeeksforGeeks, 9 October.  
-  Available at: [https://www.geeksforgeeks.org/machine-learning/u-net-architecture-explained/](https://www.geeksforgeeks.org/machine-learning/u-net-architecture-explained/) (Accessed: 27 October 2025).
+  Available at: [https://www.geeksforgeeks.org/machine-learning/u-net-architecture-explained/] (Accessed: 27 October 2025).
 
 - [2] <a name="xiao2020lung"></a> **Xiao, Z., Liu, B., Geng, L., Zhang, F. and Liu, Y.** (2020) ‘Segmentation of lung nodules using improved 3D-UNet neural network’, *Symmetry*, 12(11), p.1787.  
-  doi:[10.3390/sym12111787](https://doi.org/10.3390/sym12111787).  
-  Available at: [https://www.mdpi.com/2073-8994/12/11/1787](https://www.mdpi.com/2073-8994/12/11/1787).
+  doi:[10.3390/sym12111787].  
+  Available at: [https://www.mdpi.com/2073-8994/12/11/1787].
 
 - [3] <a name="attention_unet_sensors2023"></a> **Zhang, Y.-D.** (2023) ‘Improved U-Net with attention for medical image segmentation’, *Sensors*, 23(20), p.8589.  
-  doi:[10.3390/sensors23208589](https://doi.org/10.3390/sensors23208589).  
-  Available at: [https://www.mdpi.com/1424-8220/23/20/8589](https://www.mdpi.com/1424-8220/23/20/8589).
+  doi:[10.3390/sensors23208589].  
+  Available at: [https://www.mdpi.com/1424-8220/23/20/8589].
 
 - [4] <a name="hipmri"></a> **CSIRO** (n.d.) *HipMRI Study: 3D Prostate MRI Dataset*.  
-  Available at: [https://data.csiro.au/collection/csiro:51392v2?redirected=true](https://data.csiro.au/collection/csiro:51392v2?redirected=true).
+  Available at: [https://data.csiro.au/collection/csiro:51392v2?redirected=true].
 
 - [5] <a name="mricron"></a> **Rorden, C.** (n.d.) *MRIcron: Medical Image Visualization Tool*.  
-  Available at: [https://www.nitrc.org/projects/mricron/](https://www.nitrc.org/projects/mricron/).
+  Available at: [https://www.nitrc.org/projects/mricron/].
 
 - [6] <a name="training"></a> **Sivakumar, M., Parthasarathy, S. and Padmapriya, T.** (2024) ‘Trade-off between training and testing ratio in machine learning for medical image processing’.  
-  Available at: [https://pmc.ncbi.nlm.nih.gov/articles/PMC11419616/](https://pmc.ncbi.nlm.nih.gov/articles/PMC11419616/).
+  Available at: [https://pmc.ncbi.nlm.nih.gov/articles/PMC11419616/].
 
 - [7] <a name="diceloss"></a> **Hosseini, S.M.** (2024) *TopK Dice Loss for Medical Image Segmentation*.  
-  Available at: [https://bmva-archive.org.uk/bmvc/2024/papers/Paper_897/paper.pdf](https://bmva-archive.org.uk/bmvc/2024/papers/Paper_897/paper.pdf).
+  Available at: [https://bmva-archive.org.uk/bmvc/2024/papers/Paper_897/paper.pdf].
 
 ---
 
