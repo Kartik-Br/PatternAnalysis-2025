@@ -202,7 +202,7 @@ if __name__ == "__main__":
         "--lbl_dir", type=str, required=True, help="Directory for training labels."
     )
     parser.add_argument(
-        "--epochs", type=int, default=25, help="Number of training epochs."
+        "--epochs", type=int, default=40, help="Number of training epochs."
     )
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
@@ -212,6 +212,8 @@ if __name__ == "__main__":
         default="deep_supervision_unet.pth",
         help="Path to save the best model.",
     )
+
+    #Warning: DO NOT CHANGE THIS ARGUMENT UNLESS UTILIZING A SIMILAR DATASET WITH SEPARATE NUMBER OF SEGMENTATION CLASSES. THE HIPMRI DATASET HAS 6.
     parser.add_argument(
         "--num_classes", type=int, default=6, help="Number of segmentation classes."
     )

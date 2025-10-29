@@ -111,14 +111,26 @@ The data loader assumes that the labels and the semantic MRI images are sorted b
 Name the semantic images so that they map 1-to-1 with the MRI labels.
 
 To run the training script and reproduce results:
-- `python train.py --img_dir [image_directory] --lbl_dir [label_directory] --epochs 40`
+- `python train.py --img_dir image_directory --lbl_dir label_directory --epochs [40]`
 
 This will output `DSCSCORES.npy` and `VTLOSSES.npy`, which are NumPy files containing DSCs per class and the validation/test losses respectively.
+the ability to change hyperparameters/config was provided on the command line. using the below tags, you can modify the training if it is required.
 
-to run the prediction script, make sure to run train.py once to get a model and JSON file containing the test split, and change the IMAGE_PATH variable at the top of predict to the image you want to process to fallback, then run the following.
+- `python train.py --img_dir image_directory --lbl_dir label_directory --epochs [epochs] --batch_size [size] --lr [rate] --model_save_path [directory] --split_seed [seed]` 
+
+the square brackets ([]) indicate optional client arguments. the defaults for them are are: 
+- **epochs:** 40 
+- **batch_size:** 1
+- **lr: 1e-4**
+- **model_save_path:** deep_supervision_unet.pth
+- **split_seed:** 42 (random seed for train/test/val split)
+
+
+to run the prediction script, make sure to run train.py once to get a model and JSON file containing the test split, and change the IMAGE_PATH variable at the top of predict to the image you want to process as a fallback if the JSON doesn't exist, then run the following.
 - `python predict.py`
 
 This saves predictions in the `predictions_test` directory.
+
 
 ---
 
@@ -151,7 +163,7 @@ The figures below show multi-panel medical image visualizations:
 
 ## Discussions
 
-The training saves the model with the lowest validation loss, preventing overfitting.  
+The training saves the model with the lowest validation loss.
 An optimal model was reached at epoch = 24, and achieving DSC > 0.7 for all segments was done before 5 epochs.  
 Each epoch took roughly **1 minute**.
 
